@@ -11,6 +11,7 @@
 
 char *text_to_find;
 size_t text_to_find_length;
+bool first_file = true;     // To print a newline after file path
 
 void show_usage(char *program_name) {
     fprintf(stderr, "Usage: %s -f DIRECTORY -t TEXT\n", program_name);
@@ -18,7 +19,6 @@ void show_usage(char *program_name) {
 }
 
 void parse_args(int argc, char *argv[], char **dir, char **text) {
-
     if (argc != 5)
         show_usage(argv[0]);
 
@@ -43,7 +43,7 @@ void check_if_directory(char *dir) {
         exit(EXIT_FAILURE);
     }
 
-    if (S_ISREG(sb.st_mode)) {
+    if (!S_ISDIR(sb.st_mode)) {
         fprintf(stderr, "%s: Not a directory\n", dir);
         exit(EXIT_FAILURE);
     }
@@ -59,15 +59,20 @@ void find_in_file(const char *path) {
         return;
     }
 
-    int line_num = 1;
     bool found = false;
 
-    while (getline(&line, &len, file) != -1) {
+    for (int line_num = 1; getline(&line, &len, file) != -1; line_num++) {
         char *substring = strstr(line, text_to_find);
 
         if (substring != NULL) {
-            if (!found)
+            if (!found) {
+                if (!first_file)
+                    printf("\n");
+
+                first_file = false;
+
                 printf("File: %s\n", path);
+            }
 
             found = true;
             long foundIndex = substring - line;
@@ -79,11 +84,10 @@ void find_in_file(const char *path) {
             printf("\033[0m");
             printf("%s", substring + text_to_find_length);
         }
-
-        line_num++;
     }
 
     free(line);
+
     if (fclose(file) != 0) {
         perror(path);
     }
@@ -91,7 +95,7 @@ void find_in_file(const char *path) {
 
 
 int nftw_func(const char *path, const struct stat *sb, int flag, struct FTW *ftwbuf) {
-    if (flag == FTW_F) {
+    if (flag == FTW_F && (sb->st_mode & S_IRUSR)) {
         find_in_file(path);
     }
 
